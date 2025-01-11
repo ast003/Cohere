@@ -9,6 +9,7 @@ const Editor = () => {
   const [aiResponse, setAiResponse] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const apiKey = import.meta.env.VITE_GOOGLE_API_KEY;
 
   const handleTextChange = (content) => {
     setEditorValue(content);
@@ -30,7 +31,7 @@ const Editor = () => {
 
     try {
       const response = await axios.post(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=AIzaSyBxFHTe8G5By0wLipJhDoMOz7vKtq2qjkI`,
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
         {
           contents: [
             {
@@ -58,11 +59,10 @@ const Editor = () => {
       setLoading(false);
     }
   };
+
   return (
     <div className="flex flex-col h-screen bg-gray-100 p-6">
-      <h1 className="text-2xl font-bold mb-4 text-gray-700">
-        Text Editor with AI Help
-      </h1>
+      <h1 className="text-2xl font-bold mb-4 text-gray-700">Workspace</h1>
       <div className="bg-white shadow-md rounded-lg p-4 flex-grow flex flex-col space-y-4">
         <ReactQuill
           value={editorValue}
@@ -104,4 +104,5 @@ const Editor = () => {
     </div>
   );
 };
+
 export default Editor;
