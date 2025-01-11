@@ -1,0 +1,107 @@
+import React, { useState } from "react";
+import ReactQuill from "react-quill";
+import "react-quill/dist/quill.snow.css";
+import axios from "axios";
+
+const Editor = () => {
+  const [editorValue, setEditorValue] = useState("");
+  const [aiPrompt, setAiPrompt] = useState("");
+  const [aiResponse, setAiResponse] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+
+  const handleTextChange = (content) => {
+    setEditorValue(content);
+  };
+
+  const handlePromptChange = (e) => {
+    setAiPrompt(e.target.value);
+  };
+
+  const handleAIHelp = async () => {
+    if (!aiPrompt.trim()) {
+      setError("Please provide a prompt for AI.");
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+    setAiResponse("");
+
+    try {
+      const response = await axios.post(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=AIzaSyBxFHTe8G5By0wLipJhDoMOz7vKtq2qjkI`,
+        {
+          contents: [
+            {
+              parts: [
+                {
+                  text: aiPrompt,
+                },
+              ],
+            },
+          ],
+        }
+      );
+
+      const suggestion =
+        response.data?.candidates?.[0]?.content?.parts?.[0]?.text ||
+        "No suggestion generated.";
+      setAiResponse(suggestion);
+    } catch (err) {
+      console.error("Error fetching AI help:", err.response?.data || err.message);
+      setError(
+        err.response?.data?.error?.message ||
+          "Failed to get AI help. Please check your API key or try again later."
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+  return (
+    <div className="flex flex-col h-screen bg-gray-100 p-6">
+      <h1 className="text-2xl font-bold mb-4 text-gray-700">
+        Text Editor with AI Help
+      </h1>
+      <div className="bg-white shadow-md rounded-lg p-4 flex-grow flex flex-col space-y-4">
+        <ReactQuill
+          value={editorValue}
+          onChange={handleTextChange}
+          className="h-full"
+        />
+        <div>
+          <h2 className="text-lg font-semibold mb-2 text-gray-600">AI Prompt</h2>
+          <input
+            type="text"
+            value={aiPrompt}
+            onChange={handlePromptChange}
+            placeholder="Enter your prompt for AI..."
+            className="w-full p-2 border border-gray-300 rounded"
+            aria-label="AI Prompt"
+          />
+        </div>
+        <div className="flex items-center space-x-4">
+          <button
+            onClick={handleAIHelp}
+            className={`bg-blue-600 text-white py-2 px-4 rounded hover:bg-blue-500 ${
+              loading ? "opacity-50 cursor-not-allowed" : ""
+            }`}
+            disabled={loading}
+          >
+            {loading ? "Getting AI Help..." : "Get AI Suggestion"}
+          </button>
+          {error && <p className="text-red-500 text-sm">{error}</p>}
+        </div>
+        {aiResponse && (
+          <div className="bg-gray-50 p-4 rounded-lg shadow-inner">
+            <h2 className="text-lg font-semibold text-gray-600 mb-2">
+              AI Suggestion
+            </h2>
+            <p className="text-gray-700">{aiResponse}</p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+export default Editor;
