@@ -9,6 +9,8 @@ const Editor = () => {
   const [aiResponse, setAiResponse] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [shareableLink, setShareableLink] = useState("");
+
   const apiKey = import.meta.env.VITE_GOOGLE_API_KEY;
 
   const handleTextChange = (content) => {
@@ -28,7 +30,6 @@ const Editor = () => {
     setLoading(true);
     setError(null);
     setAiResponse("");
-
     try {
       const response = await axios.post(
         `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
@@ -57,6 +58,28 @@ const Editor = () => {
       );
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleDownload = () => {
+    const blob = new Blob([editorValue], { type: "text/plain" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "document.txt";
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleShare = async () => {
+    try {
+      const response = await axios.post("http://localhost:5000/save", {
+        content: editorValue,
+      });
+      setShareableLink(response.data.shareableLink);
+    } catch (err) {
+      console.error("Error sharing document:", err.response?.data || err.message);
+      setError("Failed to create a shareable link.");
     }
   };
 
@@ -90,6 +113,18 @@ const Editor = () => {
           >
             {loading ? "Getting AI Help..." : "Get AI Suggestion"}
           </button>
+          <button
+            onClick={handleDownload}
+            className="bg-green-600 text-white py-2 px-4 rounded hover:bg-green-500"
+          >
+            Download File
+          </button>
+          <button
+            onClick={handleShare}
+            className="bg-purple-600 text-white py-2 px-4 rounded hover:bg-purple-500"
+          >
+            Share Link
+          </button>
           {error && <p className="text-red-500 text-sm">{error}</p>}
         </div>
         {aiResponse && (
@@ -98,6 +133,16 @@ const Editor = () => {
               AI Suggestion
             </h2>
             <p className="text-gray-700">{aiResponse}</p>
+          </div>
+        )}
+        {shareableLink && (
+          <div className="bg-gray-50 p-4 rounded-lg shadow-inner">
+            <h2 className="text-lg font-semibold text-gray-600 mb-2">
+              Shareable Link
+            </h2>
+            <a href={shareableLink} target="_blank" rel="noopener noreferrer" className="text-blue-500 underline">
+              {shareableLink}
+            </a>
           </div>
         )}
       </div>
