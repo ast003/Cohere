@@ -1,7 +1,11 @@
-import React, { useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import ReactQuill from "react-quill";
 import "react-quill/dist/quill.snow.css";
 import axios from "axios";
+import { io } from "socket.io-client";
+
+const SOCKET_SERVER = "http://localhost:5000"; // Change if deployed
+const DOCUMENT_ID = "my-doc-1"; // Unique document ID
 
 const Editor = () => {
   const [editorValue, setEditorValue] = useState("");
@@ -9,11 +13,33 @@ const Editor = () => {
   const [aiResponse, setAiResponse] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [shareableLink, setShareableLink] = useState("");
-
   const apiKey = import.meta.env.VITE_GOOGLE_API_KEY;
+  const socket = useRef(null);
+  const quillRef = useRef(null);
 
-  const handleTextChange = (content) => {
+  useEffect(() => {
+    socket.current = io(SOCKET_SERVER);
+
+    socket.current.emit("get-document", DOCUMENT_ID);
+
+    socket.current.on("load-document", (content) => {
+      setEditorValue(content);
+    });
+
+    socket.current.on("receive-changes", (delta) => {
+      quillRef.current.getEditor().updateContents(delta);
+    });
+
+    return () => {
+      socket.current.disconnect();
+    };
+  }, []);
+
+  const handleTextChange = (content, delta, source) => {
+    if (source === "user") {
+      socket.current.emit("send-changes", { docId: DOCUMENT_ID, delta });
+      socket.current.emit("save-document", { docId: DOCUMENT_ID, content });
+    }
     setEditorValue(content);
   };
 
@@ -34,15 +60,7 @@ const Editor = () => {
       const response = await axios.post(
         `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
         {
-          contents: [
-            {
-              parts: [
-                {
-                  text: aiPrompt,
-                },
-              ],
-            },
-          ],
+          contents: [{ parts: [{ text: aiPrompt }] }],
         }
       );
 
@@ -52,34 +70,9 @@ const Editor = () => {
       setAiResponse(suggestion);
     } catch (err) {
       console.error("Error fetching AI help:", err.response?.data || err.message);
-      setError(
-        err.response?.data?.error?.message ||
-          "Failed to get AI help. Please check your API key or try again later."
-      );
+      setError("Failed to get AI help. Please check your API key or try again later.");
     } finally {
       setLoading(false);
-    }
-  };
-
-  const handleDownload = () => {
-    const blob = new Blob([editorValue], { type: "text/plain" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = "document.txt";
-    link.click();
-    URL.revokeObjectURL(url);
-  };
-
-  const handleShare = async () => {
-    try {
-      const response = await axios.post("http://localhost:5000/save", {
-        content: editorValue,
-      });
-      setShareableLink(response.data.shareableLink);
-    } catch (err) {
-      console.error("Error sharing document:", err.response?.data || err.message);
-      setError("Failed to create a shareable link.");
     }
   };
 
@@ -88,6 +81,7 @@ const Editor = () => {
       <h1 className="text-2xl font-bold mb-4 text-gray-700">Workspace</h1>
       <div className="bg-white shadow-md rounded-lg p-4 flex-grow flex flex-col space-y-4">
         <ReactQuill
+          ref={quillRef}
           value={editorValue}
           onChange={handleTextChange}
           className="h-full"
@@ -113,18 +107,6 @@ const Editor = () => {
           >
             {loading ? "Getting AI Help..." : "Get AI Suggestion"}
           </button>
-          <button
-            onClick={handleDownload}
-            className="bg-green-600 text-white py-2 px-4 rounded hover:bg-green-500"
-          >
-            Download File
-          </button>
-          <button
-            onClick={handleShare}
-            className="bg-purple-600 text-white py-2 px-4 rounded hover:bg-purple-500"
-          >
-            Share Link
-          </button>
           {error && <p className="text-red-500 text-sm">{error}</p>}
         </div>
         {aiResponse && (
@@ -133,16 +115,6 @@ const Editor = () => {
               AI Suggestion
             </h2>
             <p className="text-gray-700">{aiResponse}</p>
-          </div>
-        )}
-        {shareableLink && (
-          <div className="bg-gray-50 p-4 rounded-lg shadow-inner">
-            <h2 className="text-lg font-semibold text-gray-600 mb-2">
-              Shareable Link
-            </h2>
-            <a href={shareableLink} target="_blank" rel="noopener noreferrer" className="text-blue-500 underline">
-              {shareableLink}
-            </a>
           </div>
         )}
       </div>

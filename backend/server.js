@@ -1,54 +1,57 @@
-const express = require("express");
-const bodyParser = require("body-parser");
-const cors = require("cors");
-const fs = require("fs");
-const { nanoid } = require("nanoid"); // CommonJS-compatible nanoid@3
+import express from "express";
+import http from "http";
+import { Server } from "socket.io";
+import mongoose from "mongoose";
+import dotenv from "dotenv";
+import cors from "cors";
 
+dotenv.config();
 const app = express();
-const PORT = 5000;
+const server = http.createServer(app);
+const io = new Server(server, {
+  cors: {
+    origin: "*",
+    methods: ["GET", "POST"],
+  },
+});
 
-app.use(cors());
-app.use(bodyParser.json());
+mongoose
+  .connect("mongodb://localhost:27017/db", { useNewUrlParser: true, useUnifiedTopology: true })
+  .then(() => console.log("MongoDB connected"))
+  .catch((err) => console.error("MongoDB connection error:", err));
 
-const storagePath = "./storage";
-if (!fs.existsSync(storagePath)) {
-  fs.mkdirSync(storagePath);
-}
+const DocumentSchema = new mongoose.Schema({
+    _id: String,
+  content: String,
+});
 
-// Save content and return shareable link
-app.post("/save", (req, res) => {
-  const { content } = req.body;
+const Document = mongoose.model("Document", DocumentSchema);
 
-  if (!content) {
-    return res.status(400).json({ error: "Content is required" });
-  }
+io.on("connection", (socket) => {
+  console.log("User connected:", socket.id);
 
-  const fileId = nanoid();
-  const filePath = `${storagePath}/${fileId}.txt`;
-
-  fs.writeFile(filePath, content, (err) => {
-    if (err) {
-      console.error(err);
-      return res.status(500).json({ error: "Failed to save the file." });
+  socket.on("get-document", async (docId) => {
+    let document = await Document.findById(docId);
+    if (!document) {
+      document = await Document.create({ _id: docId, content: "" });
     }
+    socket.join(docId);
+    socket.emit("load-document", document.content);
+  });
 
-    const shareableLink = `http://localhost:${PORT}/file/${fileId}`;
-    res.json({ fileId, shareableLink });
+  socket.on("save-document", async ({ docId, content }) => {
+    await Document.findByIdAndUpdate(docId, { content });
+  });
+
+  socket.on("send-changes", ({ docId, delta }) => {
+    socket.to(docId).emit("receive-changes", delta);
+  });
+
+  socket.on("disconnect", () => {
+    console.log("User disconnected:", socket.id);
   });
 });
 
-// Serve the file by ID
-app.get("/file/:fileId", (req, res) => {
-  const fileId = req.params.fileId;
-  const filePath = `${storagePath}/${fileId}.txt`;
-
-  if (!fs.existsSync(filePath)) {
-    return res.status(404).send("File not found.");
-  }
-
-  res.download(filePath);
-});
-
-app.listen(PORT, () => {
-  console.log(`Server running on http://localhost:${PORT}`);
+server.listen(5000, () => {
+  console.log("Server running on port 5000");
 });
