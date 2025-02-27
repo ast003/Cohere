@@ -4,7 +4,7 @@ import "react-quill/dist/quill.snow.css";
 import axios from "axios";
 import { io } from "socket.io-client";
 
-const SOCKET_SERVER = "http://localhost:5000"; // Change if deployed
+const SOCKET_SERVER = "http://localhost:5000"; 
 const DOCUMENT_ID = "my-doc-1"; // Unique document ID
 
 const Editor = () => {
